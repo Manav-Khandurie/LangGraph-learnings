@@ -45,12 +45,9 @@ jobs:
           fail-on-denial: false
 
       - name: Upload human approval marker
-        run: |
-          if [[ -z "${{ steps.approval.outputs.outcome }}" ]]; then
-            echo "invalid" > human_decision.txt
-          else
-            echo "${{ steps.approval.outputs.outcome }}" > human_decision.txt
-          fi
+        if: ${{ steps.approval.outputs.outcome != '' }}
+        run: echo "${{ steps.approval.outputs.outcome }}" > human_decision.txt
+
 
       - name: Upload human decision artifact
         uses: actions/upload-artifact@v4
