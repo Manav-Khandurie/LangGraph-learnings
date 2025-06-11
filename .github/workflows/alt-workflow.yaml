@@ -72,17 +72,14 @@ jobs:
       - name: Decide
         id: set-output
         run: |
-          if [[ -f human_decision.txt ]]; then
-            OUTCOME=$(cat human_decision.txt)
-            echo "🧠 Human said: $OUTCOME"
-            if [[ "$OUTCOME" == "approved" || "$OUTCOME" == "yes" ]]; then
-              echo "proceed=true" >> $GITHUB_OUTPUT
-            elif [[ "$OUTCOME" == "denied" || "$OUTCOME" == "no" ]]; then
-              echo "proceed=false" >> $GITHUB_OUTPUT
-            fi
+          HUMAN_DECISION=$(cat human_decision.txt | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+          if [[ "$HUMAN_DECISION" == "approved" || "$HUMAN_DECISION" == "yes" ]]; then
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          elif [[ "$HUMAN_DECISION" == "denied" || "$HUMAN_DECISION" == "no" ]]; then
+            echo "proceed=false" >> $GITHUB_OUTPUT
           else
+            echo "🧠 No valid human input. Falling back to AI decision..."
             COMMENT=$(jq -r '.code_comment' code_comment_review_result.json)
-            echo "🤖 AI Decision: $COMMENT"
             if [[ "$COMMENT" == "true" ]]; then
               echo "proceed=true" >> $GITHUB_OUTPUT
             else
