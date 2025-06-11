@@ -29,8 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: comment-review
     environment:
-      name: manual-approval
+      name: manual-approval  # 👈 Set this in GitHub repo settings with required reviewers
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Wait for manual approval
+        run: echo "✅ Approved manually via environment reviewers"
+
       - name: Save human approval
         run: echo "yes" > human_approval.txt
 
