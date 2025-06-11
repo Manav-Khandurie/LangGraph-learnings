@@ -1,0 +1,145 @@
+name: AI Review with Optional Human Approval
+
+on: [workflow_dispatch]
+
+jobs:
+  comment-review:
+    runs-on: ubuntu-latest
+    outputs:
+      review-report: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run AI Code Comment Review Agent
+        uses: Manav-Khandurie/agents/code-comment-review-agent@code-comment-review-agent-v1.0.0
+        with:
+          config-path: "./QnABot/ai-comment-review.yaml"
+          score-threshold: 85
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Upload AI comment review result
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-comment-review-report
+          path: code_comment_review_result.json
+
+  open-approval-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create approval issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🛑 Manual Approval Required for AI Review",
+              body: `Please comment **approve** or **deny** on this issue to proceed.\n\nThis will timeout in 5 minutes.`,
+            });
+
+            console.log("Created issue: " + issue.data.html_url);
+
+            const fs = require('fs');
+            fs.writeFileSync('issue_number.txt', issue.data.number.toString());
+
+      - name: Upload issue number
+        uses: actions/upload-artifact@v4
+        with:
+          name: approval-issue
+          path: issue_number.txt
+
+  poll-human-response:
+    runs-on: ubuntu-latest
+    needs: [comment-review, open-approval-issue]
+    outputs:
+      proceed-to-print: ${{ steps.decision.outputs.result }}
+    steps:
+      - name: Download issue number
+        uses: actions/download-artifact@v4
+        with:
+          name: approval-issue
+
+      - name: Download AI review
+        uses: actions/download-artifact@v4
+        with:
+          name: code-comment-review-report
+
+      - name: Read issue number
+        id: read-issue
+        run: |
+          ISSUE=$(cat issue_number.txt)
+          echo "issue_number=$ISSUE" >> $GITHUB_OUTPUT
+
+      - name: Poll for human response or timeout
+        id: decision
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const issue_number = parseInt(fs.readFileSync('issue_number.txt', 'utf-8'));
+            const reviewResult = JSON.parse(fs.readFileSync('code_comment_review_result.json', 'utf-8'));
+            const start = Date.now();
+            const timeout = 30 * 1000; // 30sec
+            let result = null;
+
+            while ((Date.now() - start) < timeout) {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number
+              });
+
+              for (const comment of comments.data) {
+                const body = comment.body.toLowerCase();
+                if (body.includes("approve") || body.includes("yes") || body.includes("lgtm")) {
+                  result = "true";
+                  break;
+                } else if (body.includes("deny") || body.includes("no")) {
+                  result = "false";
+                  break;
+                }
+              }
+
+              if (result !== null) break;
+              await new Promise(resolve => setTimeout(resolve, 15000)); // wait 15 sec
+            }
+
+            if (result === null) {
+              console.log("⏰ No response received. Falling back to AI decision...");
+              result = reviewResult.code_comment === true ? "true" : "false";
+            }
+
+            console.log("Decision result:", result);
+            core.setOutput("result", result);
+
+  print-job:
+    runs-on: ubuntu-latest
+    needs: poll-human-response
+    if: needs.poll-human-response.outputs.proceed-to-print == 'true'
+    steps:
+      - run: echo "✅ Proceeding to PRINT job"
+
+  ai-review:
+    runs-on: ubuntu-latest
+    needs: poll-human-response
+    if: needs.poll-human-response.outputs.proceed-to-print == 'false'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run AI Code Review Agent
+        uses: Manav-Khandurie/agents/code-review-agent@code-review-agent-v1.1.0
+        with:
+          config-path: "./QnABot/ai-code-review.yaml"
+          score-threshold: 75
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Upload AI review result
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-report
+          path: code_review_result.json
