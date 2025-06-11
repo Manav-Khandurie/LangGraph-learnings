@@ -1,0 +1,49 @@
+name: AI Review Extensions
+
+on: [workflow_dispatch]
+
+jobs:
+  comment-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Debug container contents
+        run: |
+          ls -la 
+          tree
+      - name: Run AI Code Review Agent
+        uses: Manav-Khandurie/agents/code-comment-review-agent@code-comment-review-agent-v1.0.0 # Stable tested code-comment-review-agent-v1.0.0
+        with:
+          config-path: "./QnABot/ai-comment-review.yaml"
+          score-threshold: 85
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+      - name: Upload code_comment_review_result.json report
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-comment-review-report
+          path: code_comment_review_result.json
+    
+  code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Run AI Code Review Agent
+        uses: Manav-Khandurie/agents/code-review-agent@code-review-agent-v1.1.0 # Stable tested 1.1.0
+        # uses: Manav-Khandurie/agents/code-review-agent@main # unstable
+        with:
+          config-path: "./ai-code-review.yaml"
+          score-threshold: 75
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      
+      - name: Upload code_review_result.json report
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-report
+          path: code_review_result.json
