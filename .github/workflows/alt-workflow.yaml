@@ -37,8 +37,7 @@ jobs:
           approvers: manav-khandurie
           minimum-approvals: 1
           issue-title: "Approve or Reject Code for Printing"
-          issue-body: |
-            Reply with **"yes"** to proceed to print or **"no"** to fallback to AI Review.
+          issue-body: "Reply with **"yes"** to proceed to print or **"no"** to fallback to AI Review."
           additional-approved-words: yes
           additional-denied-words: no
           fail-on-denial: false # 👈 Don't fail pipeline — just detect denial later
