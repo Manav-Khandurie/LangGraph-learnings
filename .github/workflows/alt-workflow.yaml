@@ -44,10 +44,9 @@ jobs:
           additional-denied-words: no
           fail-on-denial: false
 
-      - name: Upload human approval marker
-        if: ${{ steps.approval.outputs.outcome != '' }}
-        run: echo "${{ steps.approval.outputs.outcome }}" > human_decision.txt
-
+      - name: Create human_decision.txt from output
+        run: |
+          echo "${{ steps.approval.outputs.outcome || 'no_input' }}" > human_decision.txt
 
       - name: Upload human decision artifact
         uses: actions/upload-artifact@v4
@@ -76,11 +75,9 @@ jobs:
         id: set-output
         run: |
           fallback=true
-
           if [[ -f human_decision.txt ]]; then
             HUMAN_DECISION=$(cat human_decision.txt | tr -d '\r' | tr '[:upper:]' '[:lower:]')
             echo "📝 Human input interpreted as: '$HUMAN_DECISION'"
-
             if [[ "$HUMAN_DECISION" == "approved" || "$HUMAN_DECISION" == "yes" ]]; then
               echo "proceed=true" >> $GITHUB_OUTPUT
               fallback=false
@@ -92,7 +89,7 @@ jobs:
             echo "⚠️ human_decision.txt missing."
           fi
 
-          if [[ "$fallback" == "true" ]]; then
+          if [[ "$fallback" == "true" || "$HUMAN_DECISION" == "no_input" ]]; then
             echo "🧠 No valid human input. Falling back to AI decision..."
             COMMENT=$(jq -r '.code_comment' code_comment_review_result.json)
             if [[ "$COMMENT" == "true" ]]; then
