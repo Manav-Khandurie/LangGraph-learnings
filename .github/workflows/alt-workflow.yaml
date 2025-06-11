@@ -34,7 +34,7 @@ jobs:
         uses: trstringer/manual-approval@v1
         with:
           secret: ${{ secrets.GITHUB_TOKEN }}
-          approvers: manav-khandurie
+          approvers: Manav-Khandurie
           minimum-approvals: 1
           issue-title: "Approve or Reject Code for Printing"
           issue-body: "Reply with yes to proceed to print or no to fallback to AI Review."
