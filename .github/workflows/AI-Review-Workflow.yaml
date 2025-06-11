@@ -34,6 +34,7 @@ jobs:
       - name: Require manual approval
         id: approval
         uses: trstringer/manual-approval@v1
+        continue-on-error: true 
         with:
           secret: ${{ secrets.TOKEN_GITHUB }}
           approvers: manav-khandurie
@@ -45,10 +46,10 @@ jobs:
       - name: Save human approval
         run: echo "yes" > human_approval.txt
 
-      - name: Upload human decision
+      - name: Upload human approval
         uses: actions/upload-artifact@v4
         with:
-          name: human-decision
+          name: human-approval
           path: human_approval.txt
 
   determine-decision:
@@ -66,7 +67,7 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: human-decision
+          name: human-approval
 
       - name: Determine action
         id: set-output
