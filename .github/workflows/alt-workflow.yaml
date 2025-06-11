@@ -33,7 +33,7 @@ jobs:
         id: approval
         uses: trstringer/manual-approval@v1
         with:
-          secret: ${{ secrets.GITHUB_TOKEN }}
+          secret: ${{ secrets.TOKEN_GITHUB }}
           approvers: Manav-Khandurie
           minimum-approvals: 1
           issue-title: "Approve or Reject Code for Printing"
