@@ -41,7 +41,7 @@ jobs:
         id: approval
         uses: trstringer/manual-approval@v1
         with:
-          secret: ${{ secrets.GITHUB_TOKEN }}
+          secret: ${{ secrets.TOKEN_GITHUB }}
           approvers: manav-khandurie
           minimum-approvals: 1
           issue-title: "Manual Approval for AI Code Review"
