@@ -9,6 +9,7 @@ jobs:
       review-report: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v3
+
       - name: Run AI Comment Review Agent
         uses: Manav-Khandurie/agents/code-comment-review-agent@code-comment-review-agent-v1.0.0
         with:
@@ -16,6 +17,7 @@ jobs:
           score-threshold: 85
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
       - name: Upload AI comment review
         id: upload
         uses: actions/upload-artifact@v4
@@ -37,17 +39,20 @@ jobs:
           approvers: Manav-Khandurie
           minimum-approvals: 1
           issue-title: "Approve or Reject Code for Printing"
-          issue-body: "Reply with yes to proceed to print or no to fallback to AI Review."
+          issue-body: "Reply with **yes** to proceed or **no** to reject."
           additional-approved-words: yes
           additional-denied-words: no
-          fail-on-denial: false # 👈 Don't fail pipeline — just detect denial later
+          fail-on-denial: false
 
       - name: Upload human approval marker
         run: |
-          echo "${{ steps.approval.outputs.outcome }}" > human_decision.txt
-        shell: bash
+          if [[ -z "${{ steps.approval.outputs.outcome }}" ]]; then
+            echo "invalid" > human_decision.txt
+          else
+            echo "${{ steps.approval.outputs.outcome }}" > human_decision.txt
+          fi
 
-      - name: Upload artifact
+      - name: Upload human decision artifact
         uses: actions/upload-artifact@v4
         with:
           name: human-decision
@@ -63,21 +68,34 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: code-comment-review-report
+
       - name: Try to download human decision
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: human-decision
 
-      - name: Decide
+      - name: Decide whether to proceed
         id: set-output
         run: |
-          HUMAN_DECISION=$(cat human_decision.txt | tr -d '\r' | tr '[:upper:]' '[:lower:]')
-          if [[ "$HUMAN_DECISION" == "approved" || "$HUMAN_DECISION" == "yes" ]]; then
-            echo "proceed=true" >> $GITHUB_OUTPUT
-          elif [[ "$HUMAN_DECISION" == "denied" || "$HUMAN_DECISION" == "no" ]]; then
-            echo "proceed=false" >> $GITHUB_OUTPUT
+          fallback=true
+
+          if [[ -f human_decision.txt ]]; then
+            HUMAN_DECISION=$(cat human_decision.txt | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+            echo "📝 Human input interpreted as: '$HUMAN_DECISION'"
+
+            if [[ "$HUMAN_DECISION" == "approved" || "$HUMAN_DECISION" == "yes" ]]; then
+              echo "proceed=true" >> $GITHUB_OUTPUT
+              fallback=false
+            elif [[ "$HUMAN_DECISION" == "denied" || "$HUMAN_DECISION" == "no" ]]; then
+              echo "proceed=false" >> $GITHUB_OUTPUT
+              fallback=false
+            fi
           else
+            echo "⚠️ human_decision.txt missing."
+          fi
+
+          if [[ "$fallback" == "true" ]]; then
             echo "🧠 No valid human input. Falling back to AI decision..."
             COMMENT=$(jq -r '.code_comment' code_comment_review_result.json)
             if [[ "$COMMENT" == "true" ]]; then
@@ -92,7 +110,7 @@ jobs:
     needs: determine-decision
     if: needs.determine-decision.outputs.proceed-to-print == 'true'
     steps:
-      - run: echo "✅ HUMAN/AI Approved — Printing!"
+      - run: echo "✅ HUMAN/AI Approved — Proceeding to Print."
 
   ai-review:
     runs-on: ubuntu-latest
@@ -100,6 +118,7 @@ jobs:
     if: needs.determine-decision.outputs.proceed-to-print == 'false'
     steps:
       - uses: actions/checkout@v3
+
       - name: Run fallback AI Review
         uses: Manav-Khandurie/agents/code-review-agent@code-review-agent-v1.1.0
         with:
