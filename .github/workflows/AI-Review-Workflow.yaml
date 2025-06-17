@@ -1,4 +1,4 @@
-name: AI Review Extensions
+name: AI Review with Human Approval via Environment
 
 on: [workflow_dispatch]
 
@@ -25,40 +25,31 @@ jobs:
           name: code-comment-review-report
           path: code_comment_review_result.json
 
-  manual-approval:
+  human-approval:
     runs-on: ubuntu-latest
     needs: comment-review
-    timeout-minutes: 1  # ✅ enforce timeout at the job level
-    continue-on-error: true 
+    environment:
+      name: manual-approval
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    continue-on-error: true   # 👈 So if no response or rejection, job won't fail workflow
+    timeout-minutes: 1
     steps:
-      - name: Require manual approval
-        id: approval
-        uses: trstringer/manual-approval@v1
-        continue-on-error: true 
-        with:
-          secret: ${{ secrets.TOKEN_GITHUB }}
-          approvers: manav-khandurie
-          minimum-approvals: 1
-          issue-title: "Manual Approval for AI Code Review"
-          issue-body: "Approve to continue with PRINT job. Otherwise fallback to AI decision."
-          exclude-workflow-initiator-as-approver: false
-
-      - name: Save human approval
+      - name: Human explicitly approved
         run: echo "yes" > human_approval.txt
 
       - name: Upload human approval
         uses: actions/upload-artifact@v4
         with:
-          name: human-approval
+          name: human-decision
           path: human_approval.txt
 
   determine-decision:
     runs-on: ubuntu-latest
-    needs: [comment-review, manual-approval]
+    needs: [comment-review, human-approval]
     outputs:
       proceed-to-print: ${{ steps.set-output.outputs.proceed }}
     steps:
-      - name: Download review artifact
+      - name: Download AI result
         uses: actions/download-artifact@v4
         with:
           name: code-comment-review-report
@@ -67,17 +58,17 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: human-approval
+          name: human-decision
 
-      - name: Determine action
+      - name: Decide what to do
         id: set-output
         run: |
           if [[ -f human_approval.txt ]]; then
-            echo "✅ Human approved override"
+            echo "✅ Human explicitly approved."
             echo "proceed=true" >> $GITHUB_OUTPUT
           else
             COMMENT=$(jq -r '.code_comment' code_comment_review_result.json)
-            echo "🤖 AI Decision code_comment = $COMMENT"
+            echo "🤖 AI says: $COMMENT"
             if [[ "$COMMENT" == "true" ]]; then
               echo "proceed=true" >> $GITHUB_OUTPUT
             else
@@ -90,7 +81,7 @@ jobs:
     needs: determine-decision
     if: needs.determine-decision.outputs.proceed-to-print == 'true'
     steps:
-      - run: echo "✅ Proceeding to PRINT job"
+      - run: echo "🎉 Printing approved code!"
 
   ai-review:
     runs-on: ubuntu-latest
@@ -99,7 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Run AI Code Review Agent
+      - name: Run fallback AI Code Review Agent
         uses: Manav-Khandurie/agents/code-review-agent@code-review-agent-v1.1.0
         with:
           config-path: "./QnABot/ai-code-review.yaml"
@@ -107,7 +98,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
-      - name: Upload AI review result
+      - name: Upload fallback review
         uses: actions/upload-artifact@v4
         with:
           name: code-review-report
