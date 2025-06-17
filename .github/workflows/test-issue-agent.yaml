@@ -69,7 +69,7 @@ jobs:
           path: data/
       
       - name: Run Issue Agent
-        uses: Manav-Khandurie/agents/issue-agent@main
+        uses: Manav-Khandurie/agents/issue-agent@issue-agent-v1.0.0
         with:
           src: "./data"
           provider: "deepseek"
